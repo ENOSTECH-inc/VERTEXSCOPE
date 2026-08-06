@@ -103,7 +103,35 @@ export interface DebugTrace {
   error?: string
 }
 
-export type QueryMode = 'answer' | 'search'
+/** 検索結果を Vertex AI Gemini に読ませて回答する経路の情報源 */
+export interface ChatSource {
+  title: string
+  uri: string
+  mimeType: string
+  documentName: string
+  documentKind: string
+  /** 実体を Gemini が読めたか（読めない形式・実体欠落は false） */
+  readable: boolean
+  /** インデックスに残っているが実体が見つからなかった */
+  missing?: boolean
+}
+
+export interface ChatOutcome {
+  answerText: string
+  sources: ChatSource[]
+  model: string
+  searchTotalSize: number
+  raw: Record<string, unknown>
+}
+
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  text: string
+  sources?: ChatSource[]
+}
+
+export type QueryMode = 'chat' | 'answer' | 'search'
 
 export interface HistoryItem {
   id: string
@@ -112,6 +140,7 @@ export interface HistoryItem {
   dataStore: string
   answer?: AnswerOutcome
   search?: SearchOutcome
+  chat?: ChatOutcome
   timestamp: number
   trace?: DebugTrace
 }

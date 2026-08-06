@@ -1,6 +1,8 @@
 import {
   ArrowUp,
   Copy,
+  Eraser,
+  FileWarning,
   Files,
   MessageSquareDashed,
   RotateCcw,
@@ -43,13 +45,18 @@ export function SearchPage() {
   const lastTrace = useSearchStore((s) => s.lastTrace)
   const history = useSearchStore((s) => s.history)
   const sessionName = useSearchStore((s) => s.sessionName)
+  const chatMessages = useSearchStore((s) => s.chatMessages)
+  const executeChat = useSearchStore((s) => s.executeChat)
+  const clearChat = useSearchStore((s) => s.clearChat)
   const executeAnswer = useSearchStore((s) => s.executeAnswer)
   const executeSearch = useSearchStore((s) => s.executeSearch)
   const resetSession = useSearchStore((s) => s.resetSession)
   const clearError = useSearchStore((s) => s.clearError)
 
   const [selectedDataStore, setSelectedDataStore] = useState('')
-  const [mode, setMode] = useState<QueryMode>('answer')
+  // 既定は「会話」。Standard エディションのデータストアでも動く唯一の生成経路。
+  const [mode, setMode] = useState<QueryMode>('chat')
+  const [topK, setTopK] = useState(5)
   const [pane, setPane] = useState<'result' | 'debug'>('result')
   const [queryText, setQueryText] = useState('')
   const [preamble, setPreamble] = useState('')
@@ -98,7 +105,16 @@ export function SearchPage() {
     const text = queryText.trim()
     if (!text || !selectedDataStore) return
 
-    if (mode === 'answer') {
+    if (mode === 'chat') {
+      await executeChat({
+        dataStore: selectedDataStore,
+        query: text,
+        topK,
+        filter: filterExpr || undefined,
+        servingConfig,
+      })
+      setQueryText('')
+    } else if (mode === 'answer') {
       await executeAnswer({
         dataStore: selectedDataStore,
         query: text,
@@ -161,8 +177,9 @@ export function SearchPage() {
                 <div className="inline-flex w-full overflow-hidden rounded-md border border-slate-200 dark:border-slate-700">
                   {(
                     [
-                      ['answer', '生成回答 (answer)'],
-                      ['search', '検索 (search)'],
+                      ['chat', '会話'],
+                      ['search', '検索'],
+                      ['answer', 'answer API'],
                     ] as const
                   ).map(([value, label], i) => (
                     <button
@@ -191,8 +208,41 @@ export function SearchPage() {
                 />
               </Field>
 
-              {mode === 'answer' ? (
+              {mode === 'chat' ? (
                 <>
+                  <Field
+                    label="参照する資料の数"
+                    hint="検索上位の資料を Vertex AI Gemini に読ませます。多いほど文脈は広がりますが遅くなります。"
+                  >
+                    <Input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={topK}
+                      onChange={(e) => setTopK(Number(e.target.value) || 5)}
+                    />
+                  </Field>
+                  <p className="rounded-md bg-slate-50 p-2 text-xs text-slate-500 dark:bg-slate-800/60">
+                    Discovery Engine で検索し、ヒットした資料の実体を Vertex AI Gemini
+                    に読ませて回答します。Standard エディションのデータストアでも動きます。
+                  </p>
+                  {chatMessages.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      icon={<Eraser className="size-3.5" />}
+                      onClick={clearChat}
+                    >
+                      会話をクリア
+                    </Button>
+                  )}
+                </>
+              ) : mode === 'answer' ? (
+                <>
+                  <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                    Discovery Engine の answer API は Enterprise エディション + LLM
+                    アドオンが有効なアプリでのみ利用できます。
+                  </p>
                   <Field label="プリアンブル (任意)">
                     <Textarea
                       rows={3}
@@ -364,6 +414,77 @@ export function SearchPage() {
                       </p>
                     </div>
                   </div>
+                ) : mode === 'chat' ? (
+                  chatMessages.length === 0 ? (
+                    <div className="flex h-full items-center justify-center">
+                      <div className="max-w-md text-center text-slate-500 dark:text-slate-400">
+                        <MessageSquareDashed className="mx-auto mb-2 size-10 opacity-60" />
+                        <p className="mb-1 text-base">資料について質問してみましょう</p>
+                        <p className="text-xs">検索でヒットした資料の中身を読んで回答します</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {chatMessages.map((message) =>
+                        message.role === 'user' ? (
+                          <div key={message.id} className="flex justify-end">
+                            <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-brand-600 px-4 py-2.5 text-sm whitespace-pre-wrap text-white">
+                              {message.text}
+                            </div>
+                          </div>
+                        ) : (
+                          <div key={message.id} className="flex justify-start">
+                            <div className="max-w-[92%] rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-950/40">
+                              <div
+                                className="markdown-body"
+                                // renderMarkdown 内で DOMPurify によりサニタイズ済み
+                                dangerouslySetInnerHTML={{
+                                  __html: renderMarkdown(message.text),
+                                }}
+                              />
+                              {message.sources && message.sources.length > 0 && (
+                                <details className="mt-3 border-t border-slate-200 pt-2 dark:border-slate-700">
+                                  <summary className="cursor-pointer text-xs text-slate-500 hover:text-brand-600">
+                                    参照した資料 {message.sources.length} 件
+                                  </summary>
+                                  <ol className="mt-2 space-y-1.5">
+                                    {message.sources.map((source, i) => (
+                                      <li
+                                        key={`${message.id}-src-${i}`}
+                                        className="flex items-start gap-2 text-xs"
+                                      >
+                                        <span className="shrink-0 text-slate-400">[{i + 1}]</span>
+                                        <div className="min-w-0">
+                                          <p className="truncate" title={source.title}>
+                                            {source.title}
+                                          </p>
+                                          {!source.readable && (
+                                            <p className="mt-0.5 flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400">
+                                              <FileWarning className="size-3 shrink-0" />
+                                              {source.missing
+                                                ? '実体が見つからないため題名のみ参照'
+                                                : 'この形式は本文を読めないため題名のみ参照'}
+                                            </p>
+                                          )}
+                                        </div>
+                                      </li>
+                                    ))}
+                                  </ol>
+                                </details>
+                              )}
+                            </div>
+                          </div>
+                        ),
+                      )}
+                      {querying && (
+                        <div className="flex justify-start">
+                          <div className="rounded-2xl rounded-bl-sm border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-950/40">
+                            資料を読んでいます...
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
                 ) : !currentAnswer && !currentSearch ? (
                   <div className="flex h-full items-center justify-center">
                     <div className="text-center text-slate-500 dark:text-slate-400">
@@ -538,9 +659,9 @@ export function SearchPage() {
                     }}
                     rows={2}
                     placeholder={
-                      mode === 'answer'
-                        ? '質問を入力... (Enter で送信 / Shift+Enter で改行)'
-                        : '検索キーワードを入力... (Enter で送信)'
+                      mode === 'search'
+                        ? '検索キーワードを入力... (Enter で送信)'
+                        : '質問を入力... (Enter で送信 / Shift+Enter で改行)'
                     }
                     className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
                   />
@@ -550,7 +671,7 @@ export function SearchPage() {
                     disabled={!canExecute}
                     icon={<ArrowUp className="size-3.5" />}
                   >
-                    {mode === 'answer' ? '質問' : '検索'}
+                    {mode === 'search' ? '検索' : '質問'}
                   </Button>
                 </div>
                 {error ? (

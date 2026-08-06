@@ -100,6 +100,8 @@ export const api = {
     }),
 
   // ── クエリ ──
+  chat: (body: Json) => post<Json>('/api/chat', body),
+
   search: (body: Json) => post<Json>('/api/search', body),
 
   answer: (body: Json) => post<Json>('/api/answer', body),

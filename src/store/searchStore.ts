@@ -5,6 +5,8 @@ import { api, type Json } from '@/api/client'
 import { parseAnswerResponse, parseSearchResponse } from '@/api/parse'
 import type {
   AnswerOutcome,
+  ChatMessage,
+  ChatOutcome,
   DebugTrace,
   HistoryItem,
   QueryMode,
@@ -21,6 +23,17 @@ interface SearchState {
   lastTrace: DebugTrace | null
   history: HistoryItem[]
   sessionName: string | null
+  /** 会話 (RAG) モードのやり取り */
+  chatMessages: ChatMessage[]
+
+  executeChat: (params: {
+    dataStore: string
+    query: string
+    topK?: number
+    model?: string
+    filter?: string
+    servingConfig?: string
+  }) => Promise<void>
 
   executeAnswer: (params: {
     dataStore: string
@@ -43,6 +56,7 @@ interface SearchState {
   }) => Promise<void>
 
   resetSession: () => void
+  clearChat: () => void
   clearHistory: () => void
   clearError: () => void
 }
@@ -94,6 +108,69 @@ export const useSearchStore = create<SearchState>((set, get) => {
     lastTrace: null,
     history: [],
     sessionName: null,
+    chatMessages: [],
+
+    async executeChat(params) {
+      const question: ChatMessage = {
+        id: `${Date.now()}-user`,
+        role: 'user',
+        text: params.query,
+      }
+      // 質問はすぐ表示し、回答は返ってきてから追加する
+      set({
+        querying: true,
+        error: null,
+        chatMessages: [...get().chatMessages, question],
+      })
+
+      try {
+        const body: Json = {
+          data_store: params.dataStore,
+          query: params.query,
+          // 直前の往復だけを文脈として送る (資料は毎回引き直す)
+          history: get()
+            .chatMessages.slice(-6)
+            .map((m) => ({ role: m.role, text: m.text })),
+          top_k: params.topK ?? 5,
+          ...(params.model ? { model: params.model } : {}),
+          filter: params.filter || null,
+          serving_config: params.servingConfig || 'default_search',
+        }
+
+        const { outcome, trace } = await run(
+          '/api/chat',
+          body,
+          api.chat,
+          (raw) => raw as unknown as ChatOutcome,
+        )
+
+        set({
+          chatMessages: [
+            ...get().chatMessages,
+            {
+              id: `${Date.now()}-assistant`,
+              role: 'assistant',
+              text: outcome.answerText,
+              sources: outcome.sources,
+            },
+          ],
+        })
+
+        pushHistory({
+          id: `${Date.now()}`,
+          mode: 'chat' as QueryMode,
+          query: params.query,
+          dataStore: params.dataStore,
+          chat: outcome,
+          timestamp: Date.now(),
+          trace,
+        })
+      } catch (e) {
+        set({ error: e instanceof Error ? e.message : '回答の生成に失敗しました' })
+      } finally {
+        set({ querying: false })
+      }
+    },
 
     async executeAnswer(params) {
       set({ querying: true, error: null, currentSearch: null })
@@ -166,6 +243,7 @@ export const useSearchStore = create<SearchState>((set, get) => {
     },
 
     resetSession: () => set({ sessionName: null }),
+    clearChat: () => set({ chatMessages: [], error: null }),
     clearHistory: () => set({ history: [] }),
     clearError: () => set({ error: null }),
   }

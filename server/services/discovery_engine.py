@@ -120,6 +120,11 @@ async def _token() -> str:
     return await asyncio.to_thread(_refresh_token_sync)
 
 
+async def access_token() -> str:
+    """同じ認証情報を使う他のサービス (Vertex AI) 向けにトークンを共有する。"""
+    return await _token()
+
+
 async def _headers() -> dict[str, str]:
     headers = {
         "Authorization": f"Bearer {await _token()}",
@@ -195,6 +200,11 @@ def _error_message(resp: httpx.Response) -> str:
         return f"{resp.status_code} {status or ''} {message}".strip()
     except Exception:  # noqa: BLE001
         return f"{resp.status_code} {resp.text[:500]}"
+
+
+def format_api_error(resp: httpx.Response) -> str:
+    """他モジュールから Google API のエラー整形を再利用するための公開版。"""
+    return _error_message(resp)
 
 
 async def _request(
@@ -484,6 +494,33 @@ def parse_object_uri(uri: str) -> tuple[str, str]:
     if not bucket or not obj:
         raise PreviewError(f"Cloud Storage の URL 形式が不正です: {uri}")
     return bucket, obj
+
+
+async def object_exists(uri: str) -> bool:
+    """Cloud Storage 上にオブジェクトが実在するかを、本体を落とさずに確認する。
+
+    インデックスには残っているが実体が削除済み、というドキュメントがあるため、
+    Gemini に渡す前のふるい分けに使う。
+    """
+    try:
+        bucket, obj = parse_object_uri(uri)
+    except PreviewError:
+        return False
+
+    url = (
+        f"https://storage.googleapis.com/storage/v1/b/{quote(bucket, safe='')}"
+        f"/o/{quote(obj, safe='')}"
+    )
+    headers = await _headers()
+    headers.pop("Content-Type", None)
+
+    try:
+        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+            resp = await client.get(url, headers=headers, params={"fields": "size"})
+        return resp.status_code == 200
+    except httpx.HTTPError as e:
+        logger.warning("Could not stat %s: %s", uri, e)
+        return False
 
 
 async def fetch_object(uri: str) -> tuple[bytes, str]:

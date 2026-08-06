@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 from services import discovery_engine as de
+from services import grounded_chat
 from services import settings as cfg
 
 logger = logging.getLogger(__name__)
@@ -67,6 +68,22 @@ class SearchRequest(BaseModel):
     serving_config: str = Field(default=de.DEFAULT_SERVING_CONFIG, max_length=256)
 
 
+class ChatTurn(BaseModel):
+    role: str = Field(pattern="^(user|assistant)$")
+    text: str = Field(max_length=8192)
+
+
+class ChatRequest(BaseModel):
+    data_store: str = Field(max_length=2048)
+    query: str = Field(min_length=1, max_length=8192)
+    history: list[ChatTurn] = Field(default_factory=list, max_length=20)
+    top_k: int = Field(default=grounded_chat.DEFAULT_TOP_K, ge=1, le=grounded_chat.MAX_TOP_K)
+    model: str = Field(default=grounded_chat.DEFAULT_MODEL, max_length=128)
+    model_location: str = Field(default=grounded_chat.DEFAULT_MODEL_LOCATION, max_length=64)
+    filter: str | None = Field(default=None, max_length=4096)
+    serving_config: str = Field(default=de.DEFAULT_SERVING_CONFIG, max_length=256)
+
+
 class AnswerRequest(BaseModel):
     data_store: str = Field(max_length=2048)
     query: str = Field(min_length=1, max_length=8192)
@@ -79,6 +96,11 @@ class AnswerRequest(BaseModel):
 
 def _fail(e: Exception) -> HTTPException:
     """Convert a client exception into an HTTP error, keeping the upstream status."""
+    if isinstance(e, grounded_chat.ChatError):
+        message = str(e)
+        head = message.split(" ", 1)[0]
+        status = int(head) if head.isdigit() and 400 <= int(head) <= 599 else 502
+        return HTTPException(status_code=status, detail=message)
     if isinstance(e, (de.ConfigError, de.PreviewError)):
         return HTTPException(status_code=400, detail=str(e))
     if isinstance(e, de.AuthError):
@@ -311,6 +333,24 @@ async def api_answer(req: AnswerRequest):
             preamble=req.preamble,
             model_name=req.model_name,
             related_questions=req.related_questions,
+            serving_config=req.serving_config,
+        )
+    except Exception as e:
+        raise _fail(e) from e
+
+
+@router.post("/chat")
+async def api_chat(req: ChatRequest):
+    """検索 + Vertex AI Gemini による会話。Standard エディションでも動く。"""
+    try:
+        return await grounded_chat.generate_answer(
+            req.data_store,
+            query=req.query,
+            history=[t.model_dump() for t in req.history],
+            top_k=req.top_k,
+            model=req.model,
+            model_location=req.model_location,
+            filter_expr=req.filter,
             serving_config=req.serving_config,
         )
     except Exception as e:

@@ -48,10 +48,21 @@ VERTEXSCOPE は、この往復をひとつの画面に畳み込みます。**ロ
 GCS 上のオブジェクトはバックエンドが認証付きで中継するので、**バケットを別途開く必要は
 ありません**。
 
-### 検索と生成回答の試し撃ち
-同じ画面で `search`（検索）と `answer`（生成回答）を切り替えて実行できます。
-フィルター式、取得件数、プリアンブル、会話セッションの継続といったパラメータを
-UI から調整でき、**参照元・引用箇所・関連質問**も展開して確認できます。
+### 資料と会話する
+「会話」モードでは、質問に対して **Discovery Engine で検索 → ヒットした資料の実体を
+Vertex AI Gemini に読ませて回答** します。図面 PDF の寸法を聞けば、実際に PDF を
+読んで答えます。回答には参照した資料の一覧が付き、本文を読めなかった資料
+（xlsx などの非対応形式、インデックスに残っているが実体が消えたもの）も明示されます。
+
+認証は Discovery Engine と共通の ADC をそのまま使うため、**API キーの管理は不要**です。
+
+> Discovery Engine の `answer` API は Enterprise エディション + LLM アドオンが必須ですが、
+> この「会話」モードは **Standard エディションのデータストアでも動きます**。
+
+### 検索と answer API
+`search`（素の検索）と `answer`（Discovery Engine の生成回答 API）も同じ画面から
+実行できます。フィルター式、取得件数、プリアンブル、会話セッションの継続といった
+パラメータを UI から調整でき、**参照元・引用箇所・関連質問**も確認できます。
 
 ### Debug ペイン
 実行のたびにリクエスト/レスポンスの生 JSON と所要時間を記録します。
@@ -133,6 +144,7 @@ Docker で動かす場合、`~/.config/gcloud` が読み取り専用でコンテ
 | データストア／ドキュメントの閲覧、検索 | `roles/discoveryengine.viewer` |
 | 元ファイルのプレビュー | 対象バケットへの `roles/storage.objectViewer` |
 | 削除・取り込み | `roles/discoveryengine.editor` |
+| 「会話」モード | `roles/aiplatform.user`（Vertex AI API の有効化も必要） |
 
 ---
 
@@ -169,9 +181,14 @@ Cloud Storage に限定しています。ネットワークに公開する場合
 
 ## 制限事項
 
-- **スニペット・抽出回答・要約・生成回答は Enterprise エディション限定**の機能です。
-  Standard エディションのデータストアでは、これらのオプションをオフにして
-  検索してください（既定でオフです）。生成回答には加えて LLM アドオンが必要です。
+- **スニペット・抽出回答・要約、および `answer` API は Enterprise エディション限定**です。
+  Standard エディションのデータストアでは、これらのオプションをオフにして検索するか、
+  「会話」モードを使ってください（既定はどちらもその構成です）。
+- **「会話」モードは資料の中身を Vertex AI Gemini に送ります。** 送信先は同じ GCP
+  プロジェクト内の Vertex AI で、外部サービスには出ませんが、機微な資料を扱う場合は
+  組織のポリシーを確認してください。
+- Gemini が直接読めるのは PDF・画像・テキスト・音声・動画です。xlsx / docx などは
+  題名のみが文脈として渡されます。
 - ドキュメントの削除、`FULL` モードでの取り込みは**取り消せません**。
 - ドキュメント件数の集計は 200 件で打ち切り、`200+` と表示します。
 
@@ -185,8 +202,9 @@ React 19 + TypeScript + Vite + Tailwind CSS 4    ← src/
         ▼
 FastAPI + google-auth                             ← server/
         │
-        ▼
-discoveryengine.googleapis.com / Cloud Storage
+        ├─→ discoveryengine.googleapis.com   検索・データストア操作
+        ├─→ storage.googleapis.com           元ファイルの取得 (プレビュー / 会話)
+        └─→ aiplatform.googleapis.com        Gemini による回答生成 (会話)
 ```
 
 フレームワークロックインを避けるため、Next.js のようなメタフレームワークは使わず、
