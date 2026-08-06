@@ -1,0 +1,64 @@
+{
+  "name": "vertexscope",
+  "version": "1.0.0",
+  "private": false,
+  "type": "module",
+  "description": "A local console for Vertex AI Search (Discovery Engine) data stores — browse documents, preview their source files, and run search / answer queries.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ENOSTECH-inc/VERTEXSCOPE.git"
+  },
+  "homepage": "https://github.com/ENOSTECH-inc/VERTEXSCOPE",
+  "bugs": {
+    "url": "https://github.com/ENOSTECH-inc/VERTEXSCOPE/issues"
+  },
+  "keywords": [
+    "vertex-ai-search",
+    "discovery-engine",
+    "google-cloud",
+    "rag",
+    "react",
+    "vite",
+    "fastapi"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "dependencies": {
+    "@tanstack/react-table": "^8.21.2",
+    "clsx": "^2.1.1",
+    "dompurify": "^3.2.4",
+    "lucide-react": "^0.469.0",
+    "marked": "^15.0.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.18.2",
+    "tailwind-merge": "^2.6.0",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/node": "^22.20.1",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^9.18.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "eslint-plugin-react-refresh": "^0.4.18",
+    "globals": "^15.14.0",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.20.0",
+    "vite": "^6.0.7"
+  }
+}

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ja" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="description"
+      content="Vertex AI Search のデータストアを見て、試して、直せるローカルコンソール"
+    />
+    <title>VERTEXSCOPE</title>
+    <script>
+      // 初期描画のちらつきを防ぐため、保存済みテーマを先に適用する。
+      try {
+        const stored = localStorage.getItem('vertexscope.theme')
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+        if (stored === 'dark' || (stored !== 'light' && prefersDark)) {
+          document.documentElement.classList.add('dark')
+        }
+      } catch {}
+    </script>
+  </head>
+  <body class="h-full">
+    <div id="root" class="h-full"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

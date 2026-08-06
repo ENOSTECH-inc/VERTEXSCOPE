@@ -1,0 +1,70 @@
+@import 'tailwindcss';
+
+/* class="dark" を明示的に切り替えてテーマを制御する */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-brand-50: oklch(0.97 0.02 165);
+  --color-brand-100: oklch(0.94 0.04 165);
+  --color-brand-200: oklch(0.88 0.07 165);
+  --color-brand-300: oklch(0.8 0.1 165);
+  --color-brand-400: oklch(0.72 0.13 165);
+  --color-brand-500: oklch(0.64 0.14 165);
+  --color-brand-600: oklch(0.55 0.13 165);
+  --color-brand-700: oklch(0.45 0.11 165);
+  --color-brand-800: oklch(0.37 0.09 165);
+  --color-brand-900: oklch(0.3 0.07 165);
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+    font-family:
+      ui-sans-serif, system-ui, -apple-system, 'Hiragino Kaku Gothic ProN',
+      'Noto Sans JP', 'Yu Gothic UI', sans-serif;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand-500;
+  }
+}
+
+@layer components {
+  /* 生成回答・要約の Markdown 描画 */
+  .markdown-body {
+    @apply text-sm leading-7 text-slate-700 dark:text-slate-200;
+  }
+  .markdown-body h1,
+  .markdown-body h2,
+  .markdown-body h3 {
+    @apply mt-1 mb-2 font-semibold text-slate-900 dark:text-slate-50;
+  }
+  .markdown-body h1 { @apply text-lg; }
+  .markdown-body h2 { @apply text-base; }
+  .markdown-body h3 { @apply text-sm; }
+  .markdown-body p { @apply my-1; }
+  .markdown-body ul { @apply my-1 list-disc pl-5; }
+  .markdown-body ol { @apply my-1 list-decimal pl-5; }
+  .markdown-body li { @apply my-0.5; }
+  .markdown-body a { @apply text-brand-600 underline dark:text-brand-400; }
+  .markdown-body code {
+    @apply rounded bg-slate-100 px-1 py-0.5 font-mono text-xs dark:bg-slate-800;
+  }
+  .markdown-body pre {
+    @apply my-2 overflow-x-auto rounded-lg bg-slate-100 p-3 dark:bg-slate-900;
+  }
+  .markdown-body pre code { @apply bg-transparent p-0; }
+  .markdown-body table { @apply my-2 w-full text-xs; }
+  .markdown-body th,
+  .markdown-body td {
+    @apply border border-slate-200 px-2 py-1 dark:border-slate-700;
+  }
+  .markdown-body blockquote {
+    @apply my-2 border-l-2 border-brand-400 pl-3 text-slate-600 dark:text-slate-300;
+  }
+}

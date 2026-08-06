@@ -1,0 +1,44 @@
+services:
+  vertexscope:
+    build: .
+    image: vertexscope:latest
+    container_name: vertexscope
+
+    # 既定ではループバックにのみ公開する。
+    # このコンテナは Google Cloud の認証情報を持つため、LAN や公衆網に
+    # 出す場合は自分で認証を前段に置くこと（SECURITY.md 参照）。
+    ports:
+      - "127.0.0.1:${VERTEXSCOPE_PORT:-8080}:8765"
+
+    environment:
+      # 接続先（UI からも設定できるので任意）
+      VERTEXSCOPE_PROJECT_ID: ${VERTEXSCOPE_PROJECT_ID:-}
+      VERTEXSCOPE_LOCATION: ${VERTEXSCOPE_LOCATION:-global}
+      VERTEXSCOPE_COLLECTION: ${VERTEXSCOPE_COLLECTION:-default_collection}
+
+      # コンテナ内からは同一オリジンで配信されるため、
+      # 追加のオリジンを許可する必要がある場合のみ設定する。
+      VERTEXSCOPE_ALLOWED_ORIGINS: ${VERTEXSCOPE_ALLOWED_ORIGINS:-}
+      VERTEXSCOPE_ALLOWED_HOSTS: ${VERTEXSCOPE_ALLOWED_HOSTS:-localhost,127.0.0.1,0.0.0.0}
+
+      # 認証: サービスアカウントキーを使う場合に設定する。
+      # 値を書かない形にしておくと、ホスト側で未定義のときはコンテナにも渡らない
+      # （空文字を渡すと google-auth が空パスを読みに行って失敗する）。
+      # 未設定なら下でマウントする gcloud の ADC が使われる。
+      GOOGLE_APPLICATION_CREDENTIALS:
+
+    volumes:
+      # 接続設定の永続化
+      - vertexscope-config:/data
+
+      # 認証情報 (どちらか一方を使う)
+      # 1) ローカルの gcloud ADC をそのまま読ませる（読み取り専用）
+      - ${GCLOUD_CONFIG_DIR:-${HOME}/.config/gcloud}:/home/vertexscope/.config/gcloud:ro
+      # 2) サービスアカウントキーを使う場合は下を有効にし、
+      #    GOOGLE_APPLICATION_CREDENTIALS=/secrets/key.json を設定する
+      # - ./secrets:/secrets:ro
+
+    restart: unless-stopped
+
+volumes:
+  vertexscope-config:
